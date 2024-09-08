@@ -1,11 +1,13 @@
 [package]
 name = "campaign"
 edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+published-at="0x713aa3054b368442561b8125e49f57a2b1eb1478a8d58e100f3433426228966f"
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 
 [dependencies]
-Sui = { local = "../sui-main/crates/sui-framework/packages/sui-framework" }
+# Sui = { local = "../sui-main/crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+Sui = { local = "../sui-testnet/crates/sui-framework/packages/sui-framework" }
 
 # For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
 # Revision can be a branch, a tag, and a commit hash.

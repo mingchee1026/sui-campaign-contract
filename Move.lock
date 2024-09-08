@@ -2,7 +2,7 @@
 
 [move]
 version = 2
-manifest_digest = "49670C90B20CD8A17FA888B0773E18555FCD15D34BD7B4091C4FDF915166E57E"
+manifest_digest = "0762AAB3CAEEBA16C2B8AD80FF8FE754F1A3B1982CBB9B0787872CA85D3E62DD"
 deps_digest = "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082"
 dependencies = [
   { name = "Sui" },
@@ -10,11 +10,11 @@ dependencies = [
 
 [[move.package]]
 name = "MoveStdlib"
-source = { local = "..\\sui-main\\crates\\sui-framework\\packages\\move-stdlib" }
+source = { local = "..\\sui-testnet\\crates\\sui-framework\\packages\\move-stdlib" }
 
 [[move.package]]
 name = "Sui"
-source = { local = "..\\sui-main\\crates\\sui-framework\\packages\\sui-framework" }
+source = { local = "..\\sui-testnet\\crates\\sui-framework\\packages\\sui-framework" }
 
 dependencies = [
   { name = "MoveStdlib" },
@@ -25,10 +25,3 @@ compiler-version = "1.32.1"
 edition = "2024.beta"
 flavor = "sui"
 
-[env]
-
-[env.testnet]
-chain-id = "4c78adac"
-original-published-id = "0xdf5a7356d299f0b5686589edf30b9bd8c0b6f4421ed864a34757201d6a544237"
-latest-published-id = "0xdf5a7356d299f0b5686589edf30b9bd8c0b6f4421ed864a34757201d6a544237"
-published-version = "1"

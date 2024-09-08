@@ -15,6 +15,12 @@ module campaign::campaign {
     const EReferralExistAlready: u64 = 1;
     
     // struct definitions
+
+    // admin capability struct
+    public struct AdminCap has key, store {
+        id: UID
+    }
+    
     public struct Campaign has key, store {
         id: UID,
         referrals: vector<Referral>,
@@ -53,16 +59,30 @@ module campaign::campaign {
         loggedin_at: u64,
     }
 
-    // Part 3: Module initializer to be executed when this module is published
+    // Module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
+        let admin_address = tx_context::sender(ctx);
+
+        let admin = AdminCap {
+            id: object::new(ctx)
+        };
+
+        transfer::transfer(admin, admin_address);
+    }
+
+    // create a campaign
+    // this function uses the capability design pattern (admin_cap) to ensure that only
+    // an admin can create campaign
+    public entry fun create_campaign(_: &AdminCap, ctx: &mut TxContext) {
+        let campaign_uid = object::new(ctx);
+
         let campaign = Campaign {
-            id: object::new(ctx),
+            id: campaign_uid,
             referrals: vector::empty<Referral>(),
             activities: vector::empty<Activity>(),
         };
 
-        // Transfer the forge object to the module/package publisher
-        transfer::transfer(campaign, tx_context::sender(ctx));
+        transfer::share_object(campaign);
     }
 
     // Create a new referral
@@ -144,7 +164,7 @@ module campaign::campaign {
 
         let len = vector::length(&campaign.referrals);
 
-        let i = 0;
+        let mut i = 0;
 
         // Iterate through all referrals and create ReferralDetails
         while (i < len) {
@@ -153,7 +173,10 @@ module campaign::campaign {
                 referrer: referral.referrer,
                 referee: referral.referee,
             };
+
             vector::push_back(&mut all_referrals, details);
+
+            i = i + 1;
         };
 
         all_referrals
@@ -167,14 +190,16 @@ module campaign::campaign {
 
         let len = vector::length(&campaign.referrals);
 
-        let i: u64 = 0;
+        let mut i = 0;
 
         // Iterate through all referrals and collect referees for the given referrer
         while (i < len) {
             let referral = vector::borrow(&campaign.referrals, i);
             if (referral.referrer == referrer) {
                 vector::push_back(&mut referees, referral.referee);
-            }
+            };
+
+            i = i + 1;
         };
 
         referees
@@ -188,14 +213,16 @@ module campaign::campaign {
 
         let len = vector::length(&campaign.referrals);
 
-        let i: u64 = 0;
+        let mut i = 0;
 
         // Iterate through all referrals and collect referrers for the given referee
         while (i < len) {
             let referral = vector::borrow(&campaign.referrals, i);
             if (referral.referee == referee) {
                 vector::push_back(&mut referrers, referral.referrer);
-            }
+            };
+
+            i = i + 1;
         };
 
         referrers
@@ -207,7 +234,7 @@ module campaign::campaign {
 
         let len = vector::length(&campaign.activities);
 
-        let i = 0;
+        let mut i = 0;
 
         // Iterate through all referrals and create ActivityDetails
         while (i < len) {
@@ -216,7 +243,10 @@ module campaign::campaign {
                 user: activity.user,
                 loggedin_at: activity.loggedin_at,
             };
+
             vector::push_back(&mut all_activities, details);
+            
+            i = i + 1;
         };
 
         all_activities
@@ -231,14 +261,16 @@ module campaign::campaign {
 
         let len = vector::length(&campaign.activities);
 
-        let i = 0;
+        let mut i = 0;
 
         // Iterate through all referrals to check for existence
         while (i < len) {
             let referral = vector::borrow(&campaign.referrals, i);
             if (referral.referrer == referrer && referral.referee == referee) {
                 exist = true; // Referral exists
-            }
+            };
+
+            i = i + 1;
         };
         
         exist
