@@ -1,7 +1,7 @@
 [package]
 name = "campaign"
 edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
-published-at="0x713aa3054b368442561b8125e49f57a2b1eb1478a8d58e100f3433426228966f"
+published-at="0x1194d6c7f97ff46b545fb712eabc1e32d2f6938a40192c801e3e4f43fa8a7925"
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 

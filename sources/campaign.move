@@ -61,13 +61,14 @@ module campaign::campaign {
 
     // Module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
-        let admin_address = tx_context::sender(ctx);
+        // let admin_address = tx_context::sender(ctx);
 
-        let admin = AdminCap {
+        // Creating and sending the AdminCap object to the sender.
+        let admin_cap = AdminCap {
             id: object::new(ctx)
         };
 
-        transfer::transfer(admin, admin_address);
+        transfer::transfer(admin_cap, ctx.sender()); //, admin_address);
     }
 
     // create a campaign
@@ -95,7 +96,7 @@ module campaign::campaign {
         assert!(referee != referrer, ENotReferThemselves);
 
         // Check if the referral exists
-        let exist = referral_exist(campaign, referrer, referee);
+        let exist = campaign.referral_exist(referrer, referee);
 
         assert!(!exist, EReferralExistAlready);
 
@@ -245,12 +246,14 @@ module campaign::campaign {
             };
 
             vector::push_back(&mut all_activities, details);
-            
+
             i = i + 1;
         };
 
         all_activities
     }
+
+    // Private Functions
 
     // Check if a referral exists given a referrer and referee
     fun referral_exist(
@@ -259,7 +262,7 @@ module campaign::campaign {
         referee: address): bool {
         let mut exist: bool = false;
 
-        let len = vector::length(&campaign.activities);
+        let len = vector::length(&campaign.referrals);
 
         let mut i = 0;
 
@@ -274,6 +277,14 @@ module campaign::campaign {
         };
         
         exist
+    }
+
+    // Test Functions
+
+    #[test_only]
+    // Wrapper of module initializer for testing
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx);
     }
 }
 
