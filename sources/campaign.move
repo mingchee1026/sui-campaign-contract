@@ -31,16 +31,19 @@ module campaign::campaign {
         id: UID,
         referrer: address,
         referee: address,
+        created_at: u64,
     }
 
     public struct ReferralDetails has copy, drop {
         referrer: address,
         referee: address,
+        created_at: u64,
     }
 
     public struct ReferralEvent has copy, drop {
         referrer: address,
         referee: address,
+        created_at: u64,
     }
 
     public struct Activity has key, store {
@@ -68,6 +71,12 @@ module campaign::campaign {
             id: object::new(ctx)
         };
 
+        transfer::share_object(Campaign {
+            id: object::new(ctx),
+            referrals: vector::empty<Referral>(),
+            activities: vector::empty<Activity>(),
+        });
+
         transfer::transfer(admin_cap, ctx.sender()); //, admin_address);
     }
 
@@ -90,8 +99,9 @@ module campaign::campaign {
     public entry fun create_referral(
         campaign: &mut Campaign,
         referee: address,
+        clock: &Clock,
         ctx: &mut TxContext) {
-        let referrer = tx_context::sender(ctx);
+        let referrer = ctx.sender(); //tx_context::sender(ctx);
 
         assert!(referee != referrer, ENotReferThemselves);
 
@@ -101,12 +111,14 @@ module campaign::campaign {
         assert!(!exist, EReferralExistAlready);
 
         let referral_uid = object::new(ctx);
+        let created_at = clock::timestamp_ms(clock);
 
         // Create a new referral
         let new_referral = Referral {
             id: referral_uid,
             referrer,
             referee,
+            created_at: created_at
         };
 
         // Add the new referral to the vector
@@ -116,6 +128,7 @@ module campaign::campaign {
         event::emit(ReferralEvent {
             referrer,
             referee,
+            created_at
         });
     }
 
@@ -138,7 +151,7 @@ module campaign::campaign {
         campaign: &mut Campaign,
         clock: &Clock,
         ctx: &mut TxContext) {
-        let user = tx_context::sender(ctx);
+        let user = ctx.sender(); //tx_context::sender(ctx);
         
         // Retrieve the current on-chain time
         let current_time = clock::timestamp_ms(clock);
@@ -173,6 +186,7 @@ module campaign::campaign {
             let details = ReferralDetails {
                 referrer: referral.referrer,
                 referee: referral.referee,
+                created_at: referral.created_at
             };
 
             vector::push_back(&mut all_referrals, details);

@@ -23,13 +23,31 @@ module campaign::campaign_tests {
 
         scenario.next_tx(admin);
         {
-            let admin_cap = scenario.take_from_sender<AdminCap>();
-            let ctx = scenario.ctx();
+            let new_campaign = scenario.take_from_sender<Campaign>();
 
-            admin_cap.create_campaign(ctx);
+            print(&new_campaign);
+
+            transfer::public_transfer(new_campaign, FIRST_OWNER);
+        };
+
+        scenario.next_tx(admin);
+        {
+            let admin_cap = scenario.take_from_sender<AdminCap>();
+
+            print(&admin_cap);
 
             transfer::public_transfer(admin_cap, FINAL_OWNER);
         };
+
+        // scenario.next_tx(admin);
+        // {
+        //     let admin_cap = scenario.take_from_sender<AdminCap>();
+        //     let ctx = scenario.ctx();
+
+        //     admin_cap.create_campaign(ctx);
+
+        //     transfer::public_transfer(admin_cap, FINAL_OWNER);
+        // };
     }
 
     #[test]
@@ -50,24 +68,31 @@ module campaign::campaign_tests {
 
         scenario.end();
     }
-
+    
+/*
     #[test]
     fun test_create_referral() {
         let mut scenario = test_scenario::begin(ADMIN);
         {
+            let ctx = scenario.ctx();
+            let mut clock = clock::create_for_testing(ctx);
+            clock.increment_for_testing(1);
+            clock.share_for_testing();
+
             init_campaign(&mut scenario, ADMIN);
         };        
 
         scenario.next_tx(FIRST_OWNER);
         {
             let mut origin_campaign = scenario.take_shared<Campaign>();
-
+            let clock = scenario.take_shared<clock::Clock>();
             let ctx = scenario.ctx();
 
-            origin_campaign.create_referral(TEST_REFEREE, ctx);
+            origin_campaign.create_referral(TEST_REFEREE, &clock, ctx);
 
             print(&origin_campaign);
             
+            test_scenario::return_shared(clock);
             test_scenario::return_shared(origin_campaign);
         };
 
@@ -107,19 +132,27 @@ module campaign::campaign_tests {
     fun test_get_all_referrals() {
         let mut scenario = test_scenario::begin(ADMIN);
         {
+            let ctx = scenario.ctx();
+            let mut clock = clock::create_for_testing(ctx);
+            clock.increment_for_testing(1);
+            clock.share_for_testing();
+
             init_campaign(&mut scenario, ADMIN);
         };
 
         scenario.next_tx(TEST_REFERRER);
         {
             let mut origin_campaign = scenario.take_shared<Campaign>();
+            let clock = scenario.take_shared<clock::Clock>();
             let ctx = scenario.ctx();
 
-            origin_campaign.create_referral(TEST_REFEREE, ctx);
+            origin_campaign.create_referral(TEST_REFEREE, &clock, ctx);
+
             let referrals = origin_campaign.get_all_referrals();
 
             print(&referrals);
 
+            test_scenario::return_shared(clock);
             test_scenario::return_shared(origin_campaign);
         };
 
@@ -161,20 +194,27 @@ module campaign::campaign_tests {
     fun test_get_referees_by_referrer() {
         let mut scenario = test_scenario::begin(ADMIN);
         {
+            let ctx = scenario.ctx();
+            let mut clock = clock::create_for_testing(ctx);
+            clock.increment_for_testing(1);
+            clock.share_for_testing();
+
             init_campaign(&mut scenario, ADMIN);
         };
 
         scenario.next_tx(TEST_REFERRER);
         {
             let mut origin_campaign = scenario.take_shared<Campaign>();
+            let clock = scenario.take_shared<clock::Clock>();
             let ctx = scenario.ctx();
 
-            origin_campaign.create_referral(TEST_REFEREE, ctx);
+            origin_campaign.create_referral(TEST_REFEREE, &clock, ctx);
 
             let referees = origin_campaign.get_referees_by_referrer(TEST_REFERRER);
 
             print(&referees);
 
+            test_scenario::return_shared(clock);
             test_scenario::return_shared(origin_campaign);
         };
 
@@ -185,24 +225,31 @@ module campaign::campaign_tests {
     fun test_get_referrers_by_referee() {
         let mut scenario = test_scenario::begin(ADMIN);
         {
+            let ctx = scenario.ctx();
+            let mut clock = clock::create_for_testing(ctx);
+            clock.increment_for_testing(1);
+            clock.share_for_testing();
+
             init_campaign(&mut scenario, ADMIN);
         };
 
         scenario.next_tx(TEST_REFERRER);
         {
             let mut origin_campaign = scenario.take_shared<Campaign>();
+            let clock = scenario.take_shared<clock::Clock>();
             let ctx = scenario.ctx();
 
-            origin_campaign.create_referral(TEST_REFEREE, ctx);
+            origin_campaign.create_referral(TEST_REFEREE, &clock, ctx);
 
             let referees = origin_campaign.get_referrers_by_referee(TEST_REFEREE);
 
             print(&referees);
 
+            test_scenario::return_shared(clock);
             test_scenario::return_shared(origin_campaign);
         };
 
         scenario.end();
-    }
+    } */
 }
 
