@@ -21,23 +21,23 @@ module campaign::campaign_tests {
             hd::init_for_testing(ctx);
         };
 
-        scenario.next_tx(admin);
-        {
-            let new_campaign = scenario.take_from_sender<Campaign>();
+        // scenario.next_tx(admin);
+        // {
+        //     let admin_cap = scenario.take_from_sender<AdminCap>();
 
-            print(&new_campaign);
+        //     print(&admin_cap);
 
-            transfer::public_transfer(new_campaign, FIRST_OWNER);
-        };
+        //     transfer::public_transfer(admin_cap, FIRST_OWNER);
+        // };
 
-        scenario.next_tx(admin);
-        {
-            let admin_cap = scenario.take_from_sender<AdminCap>();
+        // scenario.next_tx(admin);
+        // {
+        //     let new_campaign = scenario.take_from_sender<Campaign>();
 
-            print(&admin_cap);
+        //     print(&new_campaign);
 
-            transfer::public_transfer(admin_cap, FINAL_OWNER);
-        };
+        //     transfer::public_transfer(new_campaign, FINAL_OWNER);
+        // };
 
         // scenario.next_tx(admin);
         // {
@@ -68,8 +68,7 @@ module campaign::campaign_tests {
 
         scenario.end();
     }
-    
-/*
+
     #[test]
     fun test_create_referral() {
         let mut scenario = test_scenario::begin(ADMIN);
@@ -250,6 +249,6 @@ module campaign::campaign_tests {
         };
 
         scenario.end();
-    } */
+    }
 }
 

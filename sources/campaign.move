@@ -71,11 +71,13 @@ module campaign::campaign {
             id: object::new(ctx)
         };
 
-        transfer::share_object(Campaign {
+        let new_campaign = Campaign {
             id: object::new(ctx),
             referrals: vector::empty<Referral>(),
             activities: vector::empty<Activity>(),
-        });
+        };
+
+        transfer::share_object(new_campaign);
 
         transfer::transfer(admin_cap, ctx.sender()); //, admin_address);
     }
