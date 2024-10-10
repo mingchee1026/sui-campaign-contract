@@ -81,13 +81,13 @@ module campaign::campaign_tests {
             init_campaign(&mut scenario, ADMIN);
         };        
 
-        scenario.next_tx(FIRST_OWNER);
+        scenario.next_tx(TEST_REFEREE);
         {
             let mut origin_campaign = scenario.take_shared<Campaign>();
             let clock = scenario.take_shared<clock::Clock>();
             let ctx = scenario.ctx();
 
-            origin_campaign.create_referral(TEST_REFEREE, &clock, ctx);
+            origin_campaign.create_referral(FIRST_OWNER, &clock, ctx);
 
             print(&origin_campaign);
             

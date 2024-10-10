@@ -12,7 +12,8 @@ module campaign::campaign {
 
     /* Error Constants */
     const ENotReferThemselves: u64 = 0;
-    const EReferralExistAlready: u64 = 1;
+    const EUnauthorized: u64 = 1;
+    // const EReferralExistAlready: u64 = 2;
     
     // struct definitions
 
@@ -62,6 +63,16 @@ module campaign::campaign {
         loggedin_at: u64,
     }
 
+    // Store the admin's address
+    struct ContractState {
+        admin_cap_id: Address, 
+    }
+
+    // Initialize with a default value
+    let mut state = ContractState {
+        admin_cap_id: Address::default(), 
+    };
+
     // Module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
         // let admin_address = tx_context::sender(ctx);
@@ -71,13 +82,16 @@ module campaign::campaign {
             id: object::new(ctx)
         };
 
-        let new_campaign = Campaign {
-            id: object::new(ctx),
-            referrals: vector::empty<Referral>(),
-            activities: vector::empty<Activity>(),
-        };
+        // Store admin_cap ID in the contract state
+        state.admin_cap_id = admin_cap.id;
 
-        transfer::share_object(new_campaign);
+        // let new_campaign = Campaign {
+        //     id: object::new(ctx),
+        //     referrals: vector::empty<Referral>(),
+        //     activities: vector::empty<Activity>(),
+        // };
+
+        // transfer::share_object(new_campaign);
 
         transfer::transfer(admin_cap, ctx.sender()); //, admin_address);
     }
@@ -99,18 +113,18 @@ module campaign::campaign {
 
     // Create a new referral
     public entry fun create_referral(
+        _: &AdminCap,
         campaign: &mut Campaign,
-        referee: address,
+        referrer: address,
         clock: &Clock,
         ctx: &mut TxContext) {
-        let referrer = ctx.sender(); //tx_context::sender(ctx);
+        let referee = ctx.sender(); //tx_context::sender(ctx);
 
         assert!(referee != referrer, ENotReferThemselves);
 
         // Check if the referral exists
-        let exist = campaign.referral_exist(referrer, referee);
-
-        assert!(!exist, EReferralExistAlready);
+        // let exist = campaign.referral_exist(referrer, referee);
+        // assert!(!exist, EReferralExistAlready);
 
         let referral_uid = object::new(ctx);
         let created_at = clock::timestamp_ms(clock);
@@ -149,12 +163,16 @@ module campaign::campaign {
     // }
 
     // Log user activity
-    public entry fun log_user_activity(
+    public entry fun log_user_activity(        
+        admin_cap: &AdminCap, // Accept AdminCap as a parameter
         campaign: &mut Campaign,
         clock: &Clock,
         ctx: &mut TxContext) {
         let user = ctx.sender(); //tx_context::sender(ctx);
         
+        // Check if the admin_cap ID matches the stored admin_cap_id
+        assert!(admin_cap.id != state.admin_cap_id, EUnauthorized);
+
         // Retrieve the current on-chain time
         let current_time = clock::timestamp_ms(clock);
 
@@ -271,7 +289,7 @@ module campaign::campaign {
 
     // Private Functions
 
-    // Check if a referral exists given a referrer and referee
+    /* Check if a referral exists given a referrer and referee
     fun referral_exist(
         campaign: &Campaign, 
         referrer: address, 
@@ -293,7 +311,7 @@ module campaign::campaign {
         };
         
         exist
-    }
+    } */
 
     // Test Functions
 
