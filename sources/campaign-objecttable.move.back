@@ -2,15 +2,12 @@
 module campaign::campaign {
     use sui::event;
     use sui::clock::{Self, Clock};
-    use sui::table::{Self, Table};
-    use sui::table_vec::{Self, TableVec};
     use sui::object_table::{Self, ObjectTable};
 
     /* Error Constants */
     const ENotCampaignOwner: u64 = 0;
     const ENotReferThemselves: u64 = 1;
-    const EReferralExistAlready: u64 = 2;
-    const EReferrerNotBeReferee: u64 = 3;
+    // const EReferralExistAlready: u64 = 2;
     
     /* Structs */
 
@@ -29,16 +26,16 @@ module campaign::campaign {
     
     public struct Campaign has key, store {
         id: UID,
-        referrals: Table<address, TableVec<address>>,
+        referrals: ObjectTable<ID, Referral>,
         activities: ObjectTable<ID, Activity>,
     }
 
-    // public struct Referral has key, store {
-    //     id: UID,
-    //     referrer: address,
-    //     referee: address,
-    //     created_at: u64,
-    // }
+    public struct Referral has key, store {
+        id: UID,
+        referrer: address,
+        referee: address,
+        created_at: u64,
+    }
 
     public struct ReferralEvent has copy, drop {
         referrer: address,
@@ -76,7 +73,7 @@ module campaign::campaign {
 
         let campaign = Campaign {
             id: campaign_uid,
-            referrals: table::new<address, TableVec<address>>(ctx),
+            referrals: object_table::new<ID, Referral>(ctx),
             activities: object_table::new<ID, Activity>(ctx),
         };
 
@@ -100,45 +97,27 @@ module campaign::campaign {
         ctx: &mut TxContext) {
         let referee = ctx.sender();
 
-        // asserts that the campaign from actually belongs to the caller
+        // asserts that the campaign to be withdrawn from actually belongs to the caller
         assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
 
         assert!(referee != referrer, ENotReferThemselves);
 
-        // Check if referee is already registered as referrer
-        let existReferrer = table::contains<address, TableVec<address>>(&campaign.referrals, referee);
-        assert!(!existReferrer, EReferrerNotBeReferee);
-        
-        if (!table::contains<address, TableVec<address>>(&campaign.referrals, referrer)) {
-            let mut referees = table_vec::empty<address>(ctx);
-            table_vec::push_back(&mut referees, referee);
-            table::add(&mut campaign.referrals, referrer, referees);
-        }
-        else {
-            let referees = table::borrow_mut(&mut campaign.referrals, referrer);
-
-            let mut exist: bool = false;
-            let len = table_vec::length(referees);
-            let mut i = 0;
-
-            // Iterate through all referrals to check for existence
-            while (i < len) {
-                let added_referee = table_vec::borrow(referees, i);
-                if (added_referee == referee) {
-                    exist = true; // Referral exists
-                    break
-                };
-
-                i = i + 1;
-            };
-
-            assert!(!exist, EReferralExistAlready);
-
-            table_vec::push_back(referees, referee);
-        };
+        let referral_uid = object::new(ctx);
+        let referral_key = referral_uid.to_inner();
 
         // Retrieve the current on-chain time
         let created_at = clock::timestamp_ms(clock);
+
+        // Create a new referral
+        let new_referral = Referral {
+            id: referral_uid,
+            referrer,
+            referee,
+            created_at: created_at
+        };
+
+        // Add the new referral to the table
+        object_table::add(&mut campaign.referrals, referral_key, new_referral);
 
         // Emit the referral event
         event::emit(ReferralEvent {
@@ -156,7 +135,7 @@ module campaign::campaign {
         ctx: &mut TxContext) {
         let user = ctx.sender(); //tx_context::sender(ctx);
         
-        // asserts that the campaign from actually belongs to the caller
+        // asserts that the campaign to be withdrawn from actually belongs to the caller
         assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
 
         let activity_uid = object::new(ctx);
@@ -181,21 +160,12 @@ module campaign::campaign {
         });
     }
 
-    /* Private Functions */
-
-    
-
     /* Test Functions */
 
     #[test_only]
     // Wrapper of module initializer for testing
-    public fun init_for_testing(ctx: &mut TxContext) {
-        // Creating and sending the AdminCap object to the sender.
-        let admin_cap = AdminCap {
-            id: object::new(ctx)
-        };
-
-        transfer::transfer(admin_cap, ctx.sender());
+    public fun init_for_testing(_otw: CAMPAIGN, ctx: &mut TxContext) {
+        init(_otw, ctx);
     }
 }
 

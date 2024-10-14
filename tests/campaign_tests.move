@@ -2,131 +2,153 @@
 #[test_only]
 module campaign::campaign_tests {
     use std::debug::print;
-    use sui::test_scenario::{Self, Scenario};
-    use sui::clock::{Self, Clock};
+    use sui::test_scenario::{Self};
+    use sui::clock::{Self};
 
-    use campaign::campaign::{Self as hd, AdminCap, Campaign};
+    use campaign::campaign::{Self as hd, AdminCap, CampaignOwnerCap, Campaign};
 
     // Test addresses.
     const ADMIN: address = @0xAAA;
-    const OWNER: address = @0xAAA;
-    const FIRST_OWNER: address = @0xCAFE;
-    const FINAL_OWNER: address = @0xFACE;
-    const TEST_REFERRER: address = @0x1234;
-    const TEST_REFEREE: address = @0x5678;
-
-    public fun init_campaign(scenario: &mut Scenario, admin: address) {
-        scenario.next_tx(admin);
-        {
-            let ctx = scenario.ctx();
-            hd::init_for_testing(ctx);
-        };
-
-        // scenario.next_tx(admin);
-        // {
-        //     let admin_cap = scenario.take_from_sender<AdminCap>();
-
-        //     print(&admin_cap);
-
-        //     transfer::public_transfer(admin_cap, FIRST_OWNER);
-        // };
-
-        // scenario.next_tx(admin);
-        // {
-        //     let new_campaign = scenario.take_from_sender<Campaign>();
-
-        //     print(&new_campaign);
-
-        //     transfer::public_transfer(new_campaign, FINAL_OWNER);
-        // };
-
-        // scenario.next_tx(admin);
-        // {
-        //     let admin_cap = scenario.take_from_sender<AdminCap>();
-        //     let ctx = scenario.ctx();
-
-        //     admin_cap.create_campaign(ctx);
-
-        //     transfer::public_transfer(admin_cap, FINAL_OWNER);
-        // };
-    }
-
-    // #[test]
-    // fun test_create_campaign() {
-    //     let mut scenario = test_scenario::begin(ADMIN);
-    //     {
-    //         init_campaign(&mut scenario, ADMIN);
-    //     };        
-
-    //     scenario.next_tx(ADMIN);
-    //     {
-    //         let new_campaign = scenario.take_shared<Campaign>();
-
-    //         print(&new_campaign);
-            
-    //         test_scenario::return_shared(new_campaign);
-    //     };
-
-    //     scenario.end();
-    // }
-
-    // #[test]
-    // fun test_create_referral() {
-    //     let mut scenario = test_scenario::begin(ADMIN);
-    //     {
-    //         let ctx = scenario.ctx();
-    //         let mut clock = clock::create_for_testing(ctx);
-    //         clock.increment_for_testing(1);
-    //         clock.share_for_testing();
-
-    //         init_campaign(&mut scenario, ADMIN);
-    //     };        
-
-    //     scenario.next_tx(TEST_REFEREE);
-    //     {
-    //         let mut origin_campaign = scenario.take_shared<Campaign>();
-    //         let clock = scenario.take_shared<clock::Clock>();
-    //         let ctx = scenario.ctx();
-
-    //         origin_campaign.create_referral(OWNER, FIRST_OWNER, &clock, ctx);
-
-    //         print(&origin_campaign);
-            
-    //         test_scenario::return_shared(clock);
-    //         test_scenario::return_shared(origin_campaign);
-    //     };
-
-    //     scenario.end();
-    // }
+    // const OWNER: address = @0xAAA;
+    // const FIRST_OWNER: address = @0xCAFE;
+    // const FINAL_OWNER: address = @0xFACE;
+    const REFERRER_A: address = @0x1234;
+    const REFERRER_B: address = @0x3456;
+    const REFERRER_C: address = @0x5678;
+    const COMMON_USER: address = @0x7890;
 
     #[test]
-    fun test_log_user_activity() {
+    fun test_init() {
         let mut scenario = test_scenario::begin(ADMIN);
+        let ctx = scenario.ctx();
+        hd::init_for_testing(ctx);
+        scenario.end();
+    }
+
+    #[test]
+    fun test_create_campaign() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        let ctx = scenario.ctx();
+        hd::init_for_testing(ctx);
+
+        scenario.next_tx(ADMIN);
         {
+            let admin_cap = scenario.take_from_sender<AdminCap>();
             let ctx = scenario.ctx();
-            let mut clock = clock::create_for_testing(ctx);
-            clock.increment_for_testing(1);
-            clock.share_for_testing();
-
-            init_campaign(&mut scenario, ADMIN);
-        };
-
-        scenario.next_tx(FIRST_OWNER);
-        {
-            let mut origin_campaign = scenario.take_shared<Campaign>();
-            let clock = scenario.take_shared<clock::Clock>();
-            let ctx = scenario.ctx();
-
-            origin_campaign.log_user_activity(OWNER, &clock, ctx);
-
-            print(&origin_campaign);
-
-            test_scenario::return_shared(clock);
-            test_scenario::return_shared(origin_campaign);
+            hd::create_campaign(&admin_cap, ctx);
+            
+            scenario.return_to_sender(admin_cap);
         };
 
         scenario.end();
     }
-    
+
+    #[test]
+    fun test_create_referral() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        let ctx = scenario.ctx();
+        hd::init_for_testing(ctx);
+
+        let mut clock = clock::create_for_testing(ctx);
+        clock.increment_for_testing(1);
+        clock.share_for_testing();
+
+        scenario.next_tx(ADMIN);
+        {
+            let admin_cap = scenario.take_from_sender<AdminCap>();
+            let ctx = scenario.ctx();
+            hd::create_campaign(&admin_cap, ctx);
+            
+            scenario.return_to_sender(admin_cap);
+        };
+
+        scenario.next_tx(REFERRER_B);
+        {
+            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
+            let mut campaign = scenario.take_shared<Campaign>();
+            let clock = scenario.take_shared<clock::Clock>();
+            let ctx = scenario.ctx();
+
+            hd::create_referral(&campaign_owner, &mut campaign, REFERRER_A, &clock, ctx);
+                        
+            print(&campaign);
+
+            test_scenario::return_shared(clock);
+            test_scenario::return_shared(campaign_owner);
+            test_scenario::return_shared(campaign);
+        };
+
+        scenario.next_tx(REFERRER_C);
+        {
+            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
+            let mut campaign = scenario.take_shared<Campaign>();
+            let clock = scenario.take_shared<clock::Clock>();
+            let ctx = scenario.ctx();
+
+            hd::create_referral(&campaign_owner, &mut campaign, REFERRER_B, &clock, ctx);
+                        
+            print(&campaign);
+
+            test_scenario::return_shared(clock);
+            test_scenario::return_shared(campaign_owner);
+            test_scenario::return_shared(campaign);
+        };
+
+        scenario.next_tx(REFERRER_A);
+        {
+            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
+            let mut campaign = scenario.take_shared<Campaign>();
+            let clock = scenario.take_shared<clock::Clock>();
+            let ctx = scenario.ctx();
+
+            hd::create_referral(&campaign_owner, &mut campaign, REFERRER_C, &clock, ctx);
+                        
+            print(&campaign);
+
+            test_scenario::return_shared(clock);
+            test_scenario::return_shared(campaign_owner);
+            test_scenario::return_shared(campaign);
+        };
+
+        scenario.end();
+    }
+
+    #[test]
+    fun test_log_user_activity() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        let ctx = scenario.ctx();
+        hd::init_for_testing(ctx);
+
+        let mut clock = clock::create_for_testing(ctx);
+        clock.increment_for_testing(1);
+        clock.share_for_testing();
+
+        scenario.next_tx(ADMIN);
+        {
+            let admin_cap = scenario.take_from_sender<AdminCap>();
+            let ctx = scenario.ctx();
+            hd::create_campaign(&admin_cap, ctx);
+            
+            scenario.return_to_sender(admin_cap);
+        };
+
+        scenario.next_tx(COMMON_USER);
+        {
+            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
+            let mut campaign = scenario.take_shared<Campaign>();
+            let clock = scenario.take_shared<clock::Clock>();
+            let ctx = scenario.ctx();
+
+            hd::log_user_activity(&campaign_owner, &mut campaign, &clock, ctx);
+                        
+            print(&campaign);
+
+            test_scenario::return_shared(clock);
+            test_scenario::return_shared(campaign_owner);
+            test_scenario::return_shared(campaign);
+        };
+
+        scenario.end();
+    }    
 }
 
