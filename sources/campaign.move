@@ -11,6 +11,7 @@ module campaign::campaign {
     const ENotReferThemselves: u64 = 1;
     const EReferralExistAlready: u64 = 2;
     const EReferrerNotBeReferee: u64 = 3;
+    const ERefereeExistAlready: u64 = 4;
     
     /* Structs */
 
@@ -29,6 +30,7 @@ module campaign::campaign {
     
     public struct Campaign has key, store {
         id: UID,
+        total_referees: Table<address, address>,
         referrals: Table<address, TableVec<address>>,
         activities: ObjectTable<ID, Activity>,
     }
@@ -76,6 +78,7 @@ module campaign::campaign {
 
         let campaign = Campaign {
             id: campaign_uid,
+            total_referees: table::new<address, address>(ctx),
             referrals: table::new<address, TableVec<address>>(ctx),
             activities: object_table::new<ID, Activity>(ctx),
         };
@@ -108,11 +111,17 @@ module campaign::campaign {
         // Check if referee is already registered as referrer
         let existReferrer = table::contains<address, TableVec<address>>(&campaign.referrals, referee);
         assert!(!existReferrer, EReferrerNotBeReferee);
+
+        // Check if referee is already registered as referee
+        assert!(!table::contains<address, address>(&campaign.total_referees, referee), ERefereeExistAlready);
         
         if (!table::contains<address, TableVec<address>>(&campaign.referrals, referrer)) {
             let mut referees = table_vec::empty<address>(ctx);
             table_vec::push_back(&mut referees, referee);
             table::add(&mut campaign.referrals, referrer, referees);
+
+            // Add referee to the referees table
+            table::add(&mut campaign.total_referees, referee, referee);
         }
         else {
             let referees = table::borrow_mut(&mut campaign.referrals, referrer);
@@ -135,6 +144,9 @@ module campaign::campaign {
             assert!(!exist, EReferralExistAlready);
 
             table_vec::push_back(referees, referee);
+
+            // Add referee to the referees table
+            table::add(&mut campaign.total_referees, referee, referee);
         };
 
         // Retrieve the current on-chain time
