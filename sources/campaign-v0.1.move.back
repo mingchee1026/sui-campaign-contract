@@ -1,10 +1,10 @@
 /// Module: campaign
 module campaign::campaign {
     use sui::event;
-    use std::string::String;
-    use std::option::{none, some};
     use sui::clock::{Self, Clock};
     use sui::table::{Self, Table};
+    use sui::table_vec::{Self, TableVec};
+    use sui::object_table::{Self, ObjectTable};
 
     /* Error Constants */
     const ENotCampaignOwner: u64 = 0;
@@ -12,7 +12,6 @@ module campaign::campaign {
     const EReferralExistAlready: u64 = 2;
     const EReferrerNotBeReferee: u64 = 3;
     const ERefereeExistAlready: u64 = 4;
-    const ECampaignEndedAlready:u64 = 5;
     
     /* Structs */
 
@@ -31,20 +30,28 @@ module campaign::campaign {
     
     public struct Campaign has key, store {
         id: UID,
-        title: String,
-        about: String, // a breif description of the campaign
-        active: bool,
-        total_referees: Table<address, bool>,
-        referrals: Table<address, Table<address, bool>>,
-        activities: Table<address, Table<u64, bool>>,
-        started_at: u64,
-        ended_at: Option<u64>
+        total_referees: Table<address, address>,
+        referrals: Table<address, TableVec<address>>,
+        activities: ObjectTable<ID, Activity>,
     }
+
+    // public struct Referral has key, store {
+    //     id: UID,
+    //     referrer: address,
+    //     referee: address,
+    //     created_at: u64,
+    // }
 
     public struct ReferralEvent has copy, drop {
         referrer: address,
         referee: address,
         created_at: u64,
+    }
+
+    public struct Activity has key, store {
+        id: UID,
+        user: address,
+        loggedin_at: u64,
     }
 
     public struct LoginEvent has copy, drop {
@@ -65,25 +72,15 @@ module campaign::campaign {
     // create a campaign (and the owner object)
     // this function uses the capability design pattern (admin_cap) to ensure that only
     // an admin can create campaign
-    public entry fun create_campaign(
-        _: &AdminCap,
-        title: String,
-        about: String,
-        clock: &Clock,
-        ctx: &mut TxContext) {
+    public entry fun create_campaign(_: &AdminCap, ctx: &mut TxContext) {
         let campaign_uid = object::new(ctx);
         let campaign_id = object::uid_to_inner(&campaign_uid);
 
         let campaign = Campaign {
             id: campaign_uid,
-            title,
-            about,
-            active: true,
-            total_referees: table::new<address, bool>(ctx),
-            referrals: table::new<address, Table<address, bool>>(ctx),
-            activities: table::new<address, Table<u64, bool>>(ctx),
-            started_at: clock::timestamp_ms(clock),
-            ended_at: none()
+            total_referees: table::new<address, address>(ctx),
+            referrals: table::new<address, TableVec<address>>(ctx),
+            activities: object_table::new<ID, Activity>(ctx),
         };
 
         let campaign_owner_id = object::new(ctx);
@@ -97,16 +94,6 @@ module campaign::campaign {
         transfer::share_object(campaign_owner);
     }
 
-    // end campaign
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can end campaign
-    public entry fun end_campaign(_: &AdminCap, campaign: &mut Campaign, clock: &Clock) {
-        // asserts that the campaign is not ended already before attempting to end it
-        assert!(campaign.active == true, ECampaignEndedAlready);
-        campaign.active = false;
-        campaign.ended_at = some(clock::timestamp_ms(clock));
-    }
-
     // Create a new referral
     public entry fun create_referral(
         cap: &CampaignOwnerCap,
@@ -114,9 +101,6 @@ module campaign::campaign {
         referrer: address,
         clock: &Clock,
         ctx: &mut TxContext) {
-        // asserts that the campaign is still ongoing before attempting to create referral
-        assert!(campaign.active == true, ECampaignEndedAlready);
-
         let referee = ctx.sender();
 
         // asserts that the campaign from actually belongs to the caller
@@ -125,30 +109,44 @@ module campaign::campaign {
         assert!(referee != referrer, ENotReferThemselves);
 
         // Check if referee is already registered as referrer
-        let existReferrer = table::contains<address, Table<address, bool>>(&campaign.referrals, referee);
+        let existReferrer = table::contains<address, TableVec<address>>(&campaign.referrals, referee);
         assert!(!existReferrer, EReferrerNotBeReferee);
 
         // Check if referee is already registered as referee
-        assert!(!table::contains<address, bool>(&campaign.total_referees, referee), ERefereeExistAlready);
+        assert!(!table::contains<address, address>(&campaign.total_referees, referee), ERefereeExistAlready);
         
-        if (!table::contains<address, Table<address, bool>>(&campaign.referrals, referrer)) {
-            let mut referees = table::new<address, bool>(ctx);
-            table::add(&mut referees, referee, true);
+        if (!table::contains<address, TableVec<address>>(&campaign.referrals, referrer)) {
+            let mut referees = table_vec::empty<address>(ctx);
+            table_vec::push_back(&mut referees, referee);
             table::add(&mut campaign.referrals, referrer, referees);
 
             // Add referee to the referees table
-            table::add(&mut campaign.total_referees, referee, true);
+            table::add(&mut campaign.total_referees, referee, referee);
         }
         else {
             let referees = table::borrow_mut(&mut campaign.referrals, referrer);
 
-            // Check if referee is already registered as referee
-            assert!(!table::contains<address, bool>(referees, referee), EReferralExistAlready);
+            let mut exist: bool = false;
+            let len = table_vec::length(referees);
+            let mut i = 0;
 
-            table::add(referees, referee, true);
+            // Iterate through all referrals to check for existence
+            while (i < len) {
+                let added_referee = table_vec::borrow(referees, i);
+                if (added_referee == referee) {
+                    exist = true; // Referral exists
+                    break
+                };
+
+                i = i + 1;
+            };
+
+            assert!(!exist, EReferralExistAlready);
+
+            table_vec::push_back(referees, referee);
 
             // Add referee to the referees table
-            table::add(&mut campaign.total_referees, referee, true);
+            table::add(&mut campaign.total_referees, referee, referee);
         };
 
         // Retrieve the current on-chain time
@@ -168,29 +166,25 @@ module campaign::campaign {
         campaign: &mut Campaign,
         clock: &Clock,
         ctx: &mut TxContext) {
-        let user = ctx.sender();
+        let user = ctx.sender(); //tx_context::sender(ctx);
         
         // asserts that the campaign from actually belongs to the caller
         assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
 
+        let activity_uid = object::new(ctx);
+        let activity_key = activity_uid.to_inner();
+
         // Retrieve the current on-chain time
         let current_time = clock::timestamp_ms(clock);
+
+        let new_activity = Activity {
+            id: activity_uid,
+            user: user,
+            loggedin_at: clock::timestamp_ms(clock)
+        };
         
-        if (!table::contains<address, Table<u64, bool>>(&campaign.activities, user)) {
-            // Create new user's activities
-            let mut activities = table::new<u64, bool>(ctx);
-            // Add the new activity to the user's activities
-            table::add(&mut activities, current_time, true);
-            
-            // Add the new user and activities to the table
-            table::add(&mut campaign.activities, user, activities);
-        }
-        else {
-            // Get user's activities
-            let activities = table::borrow_mut(&mut campaign.activities, user);
-            // Add the new activity to the user's activities
-            table::add(activities, current_time, true);
-        };        
+        // Add the new activity to the table
+        object_table::add(&mut campaign.activities, activity_key, new_activity);
 
         // Emit user activity event
         event::emit(LoginEvent {
