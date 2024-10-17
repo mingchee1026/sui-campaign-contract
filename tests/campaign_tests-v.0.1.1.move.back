@@ -64,23 +64,6 @@ module campaign::campaign_tests {
         scenario.end();
     }
 
-    fun add_whitelist(wallet_address: address, permission: bool) {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            let admin_cap = scenario.take_from_sender<AdminCap>();
-            let mut campaign = scenario.take_shared<Campaign>();
-
-            hd::add_whitelist(&admin_cap, &mut campaign, wallet_address, permission);
-            
-            scenario.return_to_sender(admin_cap);
-            test_scenario::return_shared(campaign);
-        };
-
-        scenario.end();
-    }
-
     #[test]
     fun test_init() {
         let mut scenario = test_scenario::begin(ADMIN);
@@ -117,96 +100,6 @@ module campaign::campaign_tests {
     }
 
     #[test]
-    fun test_add_whitelist() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(ADMIN, true);
-            add_whitelist(REFERRER_A, true);
-            add_whitelist(REFERRER_B, true);
-            add_whitelist(REFERRER_C, true);
-            add_whitelist(COMMON_USER, true);
-        };
-
-        scenario.end();
-    }
-
-    #[test, expected_failure(abort_code = ::campaign::campaign::EAddressExistAlready)]
-    fun test_add_whitelist_duplicate() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(ADMIN, true);
-            add_whitelist(ADMIN, true);
-        };
-
-        scenario.end();
-    }
-
-    #[test]
-    fun test_update_permission_whitelist() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(REFERRER_A, true);
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            let admin_cap = scenario.take_from_sender<AdminCap>();
-            let mut campaign = scenario.take_shared<Campaign>();
-
-            hd::update_permission_whitelist(&admin_cap, &mut campaign, REFERRER_A, false);
-            
-            scenario.return_to_sender(admin_cap);
-            test_scenario::return_shared(campaign);
-        };
-
-        scenario.end();
-    }
-
-    #[test, expected_failure(abort_code = ::campaign::campaign::EAddressNotExist)]
-    fun test_update_permission_whitelist_no_exist_address() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            let admin_cap = scenario.take_from_sender<AdminCap>();
-            let mut campaign = scenario.take_shared<Campaign>();
-
-            hd::update_permission_whitelist(&admin_cap, &mut campaign, REFERRER_A, false);
-            
-            scenario.return_to_sender(admin_cap);
-            test_scenario::return_shared(campaign);
-        };
-
-        scenario.end();
-    }
-
-    #[test]
     fun test_create_referral() {
         let mut scenario = test_scenario::begin(ADMIN);
 
@@ -218,11 +111,6 @@ module campaign::campaign_tests {
             clock.share_for_testing();
 
             create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(REFERRER_B, true);
         };
 
         scenario.next_tx(REFERRER_B);
@@ -261,78 +149,6 @@ module campaign::campaign_tests {
             end_campaign();
         };
 
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(REFERRER_B, true);
-        };
-
-        scenario.next_tx(REFERRER_B);
-        {
-            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
-            let mut campaign = scenario.take_shared<Campaign>();
-            let clock = scenario.take_shared<clock::Clock>();
-            let ctx = scenario.ctx();
-
-            hd::create_referral(&campaign_owner, &mut campaign, REFERRER_A, &clock, ctx);
-                        
-            test_scenario::return_shared(clock);
-            test_scenario::return_shared(campaign_owner);
-            test_scenario::return_shared(campaign);
-        };
-
-        scenario.end();
-    }
-
-    #[test, expected_failure(abort_code = ::campaign::campaign::EPermissionNotExist)]
-    fun test_create_referral_no_exist_address() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            let ctx = scenario.ctx();
-            let mut clock = clock::create_for_testing(ctx);
-            clock.increment_for_testing(1);
-            clock.share_for_testing();
-
-            create_campaign();
-        };
-
-        scenario.next_tx(REFERRER_B);
-        {
-            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
-            let mut campaign = scenario.take_shared<Campaign>();
-            let clock = scenario.take_shared<clock::Clock>();
-            let ctx = scenario.ctx();
-
-            hd::create_referral(&campaign_owner, &mut campaign, REFERRER_A, &clock, ctx);
-                        
-            test_scenario::return_shared(clock);
-            test_scenario::return_shared(campaign_owner);
-            test_scenario::return_shared(campaign);
-        };
-
-        scenario.end();
-    }
-
-    #[test, expected_failure(abort_code = ::campaign::campaign::EPermissionNotExist)]
-    fun test_create_referral_no_permission() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            let ctx = scenario.ctx();
-            let mut clock = clock::create_for_testing(ctx);
-            clock.increment_for_testing(1);
-            clock.share_for_testing();
-
-            create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(REFERRER_B, false);
-        };
-
         scenario.next_tx(REFERRER_B);
         {
             let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
@@ -362,13 +178,6 @@ module campaign::campaign_tests {
             clock.share_for_testing();
 
             create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(REFERRER_A, true);
-            add_whitelist(REFERRER_B, true);
-            add_whitelist(REFERRER_C, true);
         };
 
         scenario.next_tx(REFERRER_B);
@@ -428,11 +237,6 @@ module campaign::campaign_tests {
             clock.share_for_testing();
 
             create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(REFERRER_B, true);
         };
 
         scenario.next_tx(REFERRER_B);

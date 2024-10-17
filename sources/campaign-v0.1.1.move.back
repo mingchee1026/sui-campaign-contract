@@ -13,9 +13,6 @@ module campaign::campaign {
     const EReferrerNotBeReferee: u64 = 3;
     const ERefereeExistAlready: u64 = 4;
     const ECampaignEndedAlready:u64 = 5;
-    const EAddressExistAlready: u64 = 6;
-    const EAddressNotExist: u64 = 7;
-    const EPermissionNotExist: u64 = 8;
     
     /* Structs */
 
@@ -37,7 +34,6 @@ module campaign::campaign {
         title: String,
         about: String, // a breif description of the campaign
         active: bool,
-        whitelist: Table<address, bool>,
         total_referees: Table<address, bool>,
         referrals: Table<address, Table<address, bool>>,
         activities: Table<address, Table<u64, bool>>,
@@ -83,7 +79,6 @@ module campaign::campaign {
             title,
             about,
             active: true,
-            whitelist: table::new<address, bool>(ctx),
             total_referees: table::new<address, bool>(ctx),
             referrals: table::new<address, Table<address, bool>>(ctx),
             activities: table::new<address, Table<u64, bool>>(ctx),
@@ -102,50 +97,17 @@ module campaign::campaign {
         transfer::share_object(campaign_owner);
     }
 
-    // End campaign
+    // end campaign
     // this function uses the capability design pattern (admin_cap) to ensure that only
     // an admin can end campaign
     public entry fun end_campaign(_: &AdminCap, campaign: &mut Campaign, clock: &Clock) {
         // asserts that the campaign is not ended already before attempting to end it
         assert!(campaign.active == true, ECampaignEndedAlready);
-
         campaign.active = false;
         campaign.ended_at = some(clock::timestamp_ms(clock));
     }
 
-    // Add custodial wallet address to whitelist
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can add address
-    public entry fun add_whitelist(
-        _: &AdminCap, 
-        campaign: &mut Campaign, 
-        wallet_address: address,
-        permission: bool) {
-        // Check if address is already whitelisted
-        assert!(!table::contains<address, bool>(&campaign.whitelist, wallet_address), EAddressExistAlready);
-        
-        // Add address to the whitelist table
-        table::add(&mut campaign.whitelist, wallet_address, permission);
-    }
-
-    // Update permission of custodial wallet address in whitelist
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can update permission
-    public entry fun update_permission_whitelist(
-        _: &AdminCap, 
-        campaign: &mut Campaign, 
-        wallet_address: address,
-        permission: bool) {
-        // Check if address is already whitelisted
-        assert!(table::contains<address, bool>(&campaign.whitelist, wallet_address), EAddressNotExist);
-        
-        // Update permission of wallet address
-        let old_permission = table::borrow_mut(&mut campaign.whitelist, wallet_address);
-        *old_permission = permission;
-    }
-
     // Create a new referral
-    // The DApp will create the whitelist entry into the contract after a referral is created successfully.
     public entry fun create_referral(
         cap: &CampaignOwnerCap,
         campaign: &mut Campaign,
@@ -160,14 +122,6 @@ module campaign::campaign {
         // asserts that the campaign from actually belongs to the caller
         assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
 
-        // Check if address is whitelisted
-        assert!(table::contains<address, bool>(&campaign.whitelist, referee), EPermissionNotExist);
-
-        // Check if address has permission
-        let permission = table::borrow(&campaign.whitelist, referee);
-        assert!(permission == true, EPermissionNotExist);
-
-        // Can not refer to itself
         assert!(referee != referrer, ENotReferThemselves);
 
         // Check if referee is already registered as referrer
