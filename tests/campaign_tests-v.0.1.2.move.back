@@ -482,12 +482,6 @@ module campaign::campaign_tests {
 
         scenario.next_tx(ADMIN);
         {
-            add_whitelist(ADMIN, true);
-            add_whitelist(COMMON_USER, true);
-        };
-
-        scenario.next_tx(ADMIN);
-        {
             let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
             let mut campaign = scenario.take_shared<Campaign>();
             let clock = scenario.take_shared<clock::Clock>();
@@ -522,109 +516,6 @@ module campaign::campaign_tests {
             let ctx = scenario.ctx();
 
             clock.increment_for_testing(1);
-
-            hd::log_user_activity(&campaign_owner, &mut campaign, &clock, ctx);
-                        
-            test_scenario::return_shared(clock);
-            test_scenario::return_shared(campaign_owner);
-            test_scenario::return_shared(campaign);
-        };
-
-        scenario.end();
-    }
-
-    #[test, expected_failure(abort_code = ::campaign::campaign::ECampaignEndedAlready)]
-    fun test_log_user_activity_referral_ended() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            let ctx = scenario.ctx();
-            let mut clock = clock::create_for_testing(ctx);
-            clock.increment_for_testing(1);
-            clock.share_for_testing();
-
-            create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            end_campaign();
-        };
-
-        scenario.next_tx(COMMON_USER);
-        {
-            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
-            let mut campaign = scenario.take_shared<Campaign>();
-            let clock = scenario.take_shared<clock::Clock>();
-            let ctx = scenario.ctx();
-
-            hd::log_user_activity(&campaign_owner, &mut campaign, &clock, ctx);
-                        
-            test_scenario::return_shared(clock);
-            test_scenario::return_shared(campaign_owner);
-            test_scenario::return_shared(campaign);
-        };
-
-        scenario.end();
-    }
-
-    #[test, expected_failure(abort_code = ::campaign::campaign::EPermissionNotExist)]
-    fun test_log_user_activity_no_exist_address() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            let ctx = scenario.ctx();
-            let mut clock = clock::create_for_testing(ctx);
-            clock.increment_for_testing(1);
-            clock.share_for_testing();
-
-            create_campaign();
-        };
-
-        scenario.next_tx(COMMON_USER);
-        {
-            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
-            let mut campaign = scenario.take_shared<Campaign>();
-            let clock = scenario.take_shared<clock::Clock>();
-            let ctx = scenario.ctx();
-
-            hd::log_user_activity(&campaign_owner, &mut campaign, &clock, ctx);
-                        
-            test_scenario::return_shared(clock);
-            test_scenario::return_shared(campaign_owner);
-            test_scenario::return_shared(campaign);
-        };
-
-        scenario.end();
-    }
-
-    #[test, expected_failure(abort_code = ::campaign::campaign::EPermissionNotExist)]
-    fun test_log_user_activity_no_permission() {
-        let mut scenario = test_scenario::begin(ADMIN);
-
-        scenario.next_tx(ADMIN);
-        {
-            let ctx = scenario.ctx();
-            let mut clock = clock::create_for_testing(ctx);
-            clock.increment_for_testing(1);
-            clock.share_for_testing();
-
-            create_campaign();
-        };
-
-        scenario.next_tx(ADMIN);
-        {
-            add_whitelist(COMMON_USER, false);
-        };
-
-        scenario.next_tx(COMMON_USER);
-        {
-            let campaign_owner = scenario.take_shared<CampaignOwnerCap>();
-            let mut campaign = scenario.take_shared<Campaign>();
-            let clock = scenario.take_shared<clock::Clock>();
-            let ctx = scenario.ctx();
 
             hd::log_user_activity(&campaign_owner, &mut campaign, &clock, ctx);
                         

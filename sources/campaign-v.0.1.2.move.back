@@ -122,12 +122,10 @@ module campaign::campaign {
         wallet_address: address,
         permission: bool) {
         // Check if address is already whitelisted
-        // assert!(!table::contains<address, bool>(&campaign.whitelist, wallet_address), EAddressExistAlready);
+        assert!(!table::contains<address, bool>(&campaign.whitelist, wallet_address), EAddressExistAlready);
         
         // Add address to the whitelist table
-        if (!table::contains<address, bool>(&campaign.whitelist, wallet_address)) {
-            table::add(&mut campaign.whitelist, wallet_address, permission);
-        }
+        table::add(&mut campaign.whitelist, wallet_address, permission);
     }
 
     // Update permission of custodial wallet address in whitelist
@@ -211,25 +209,15 @@ module campaign::campaign {
     }
 
     // Log user activity
-    public entry fun log_user_activity( 
-        cap: &CampaignOwnerCap,       
+    public entry fun log_user_activity(        
+        cap: &CampaignOwnerCap,
         campaign: &mut Campaign,
         clock: &Clock,
         ctx: &mut TxContext) {
+        let user = ctx.sender();
+        
         // asserts that the campaign from actually belongs to the caller
         assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
-
-        // asserts that the campaign is still ongoing before attempting to create referral
-        assert!(campaign.active == true, ECampaignEndedAlready);
-
-        let user = ctx.sender();
-
-        // Check if address is whitelisted
-        assert!(table::contains<address, bool>(&campaign.whitelist, user), EPermissionNotExist);
-
-        // Check if address has permission
-        let permission = table::borrow(&campaign.whitelist, user);
-        assert!(permission == true, EPermissionNotExist);
 
         // Retrieve the current on-chain time
         let current_time = clock::timestamp_ms(clock);
