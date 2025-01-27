@@ -31,6 +31,11 @@ module campaign::campaign {
         id: UID,
         campaign_id: ID
     }
+
+    public struct ReferralItem has copy, drop, store  {
+        referrer: address,
+        referee: address
+    }
     
     public struct Campaign has key, store {
         id: UID,
@@ -40,6 +45,7 @@ module campaign::campaign {
         whitelist: Table<address, bool>,
         total_referees: Table<address, bool>,
         referrals: Table<address, Table<address, bool>>,
+        testreferrals: Table<ReferralItem, u64>,
         activities: Table<address, Table<u64, bool>>,
         started_at: u64,
         ended_at: Option<u64>
@@ -86,6 +92,8 @@ module campaign::campaign {
             whitelist: table::new<address, bool>(ctx),
             total_referees: table::new<address, bool>(ctx),
             referrals: table::new<address, Table<address, bool>>(ctx),
+            // testreferrals: table::new<address, address>(ctx),
+            testreferrals: table::new<ReferralItem, u64>(ctx),
             activities: table::new<address, Table<u64, bool>>(ctx),
             started_at: clock::timestamp_ms(clock),
             ended_at: none()
@@ -163,22 +171,92 @@ module campaign::campaign {
         assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
 
         // Check if address is whitelisted
-        assert!(table::contains<address, bool>(&campaign.whitelist, referee), EPermissionNotExist);
+        // assert!(table::contains<address, bool>(&campaign.whitelist, referee), EPermissionNotExist);
 
         // Check if address has permission
-        let permission = table::borrow(&campaign.whitelist, referee);
-        assert!(permission == true, EPermissionNotExist);
+        // let permission = table::borrow(&campaign.whitelist, referee);
+        // assert!(permission == true, EPermissionNotExist);
 
         // Can not refer to itself
-        assert!(referee != referrer, ENotReferThemselves);
+        // assert!(referee != referrer, ENotReferThemselves);
 
         // Check if referee is already registered as referrer
-        let existReferrer = table::contains<address, Table<address, bool>>(&campaign.referrals, referee);
-        assert!(!existReferrer, EReferrerNotBeReferee);
+        // let existReferrer = table::contains<address, Table<address, bool>>(&campaign.referrals, referee);
+        // assert!(!existReferrer, EReferrerNotBeReferee);
 
         // Check if referee is already registered as referee
-        assert!(!table::contains<address, bool>(&campaign.total_referees, referee), ERefereeExistAlready);
+        // assert!(!table::contains<address, bool>(&campaign.total_referees, referee), ERefereeExistAlready);
         
+        if (!table::contains<address, Table<address, bool>>(&campaign.referrals, referrer)) {
+            let mut referees = table::new<address, bool>(ctx);
+            table::add(&mut referees, referee, true);
+            table::add(&mut campaign.referrals, referrer, referees);
+
+            // Add referee to the referees table
+            // table::add(&mut campaign.total_referees, referee, true);
+        }
+        else {
+            let referees = table::borrow_mut(&mut campaign.referrals, referrer);
+
+            // Check if referee is already registered as referee
+            assert!(!table::contains<address, bool>(referees, referee), EReferralExistAlready);
+
+            table::add(referees, referee, true);
+
+            // Add referee to the referees table
+            // table::add(&mut campaign.total_referees, referee, true);
+        };
+
+        // Retrieve the current on-chain time
+        let created_at = clock::timestamp_ms(clock);
+
+        // Emit the referral event
+        event::emit(ReferralEvent {
+            referrer,
+            referee,
+            created_at
+        });
+    }
+
+    public entry fun create_referral_test(
+        cap: &CampaignOwnerCap,
+        campaign: &mut Campaign,
+        referrer: address,
+        clock: &Clock,
+        ctx: &mut TxContext) {
+        // asserts that the campaign is still ongoing before attempting to create referral
+        assert!(campaign.active == true, ECampaignEndedAlready);
+
+        let referee = ctx.sender();
+
+        // asserts that the campaign from actually belongs to the caller
+        assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
+
+        // Check if address is whitelisted
+        // assert!(table::contains<address, bool>(&campaign.whitelist, referee), EPermissionNotExist);
+
+        // Check if address has permission
+        // let permission = table::borrow(&campaign.whitelist, referee);
+        // assert!(permission == true, EPermissionNotExist);
+
+        // Can not refer to itself
+        // assert!(referee != referrer, ENotReferThemselves);
+
+        // Check if referee is already registered as referrer
+        // let existReferrer = table::contains<address, Table<address, bool>>(&campaign.referrals, referee);
+        // assert!(!existReferrer, EReferrerNotBeReferee);
+
+        // Check if referee is already registered as referee
+        // assert!(!table::contains<address, bool>(&campaign.total_referees, referee), ERefereeExistAlready);
+        
+        let item = ReferralItem{ referrer, referee };
+        assert!(table::contains(&campaign.testreferrals, item) == false, ERefereeExistAlready);
+
+        let current_time = clock::timestamp_ms(clock);
+
+        // table::add(&mut campaign.testreferrals, referrer, referee);
+        table::add(&mut campaign.testreferrals, item, current_time);
+/*
         if (!table::contains<address, Table<address, bool>>(&campaign.referrals, referrer)) {
             let mut referees = table::new<address, bool>(ctx);
             table::add(&mut referees, referee, true);
@@ -198,7 +276,7 @@ module campaign::campaign {
             // Add referee to the referees table
             table::add(&mut campaign.total_referees, referee, true);
         };
-
+*/
         // Retrieve the current on-chain time
         let created_at = clock::timestamp_ms(clock);
 
