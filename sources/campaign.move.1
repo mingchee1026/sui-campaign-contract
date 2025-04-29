@@ -7,7 +7,7 @@ module campaign::campaign {
     use sui::table::{Self, Table};
 
     /* Error Constants */
-    // const ENotCampaignOwner: u64 = 0;
+    const ENotCampaignOwner: u64 = 0;
     const ENotReferThemselves: u64 = 1;
     const EAddressAlreadyRegisteredAsReferrer: u64 = 2;
     const EAddressAlreadyRegisteredAsReferee: u64 = 3;
@@ -27,10 +27,10 @@ module campaign::campaign {
     }
 
     // campaign owner cap  struct
-    // public struct CampaignOwnerCap has key, store {
-    //     id: UID,
-    //     campaign_id: ID
-    // }
+    public struct CampaignOwnerCap has key, store {
+        id: UID,
+        campaign_id: ID
+    }
     
     public struct Campaign has key, store {
         id: UID,
@@ -38,8 +38,8 @@ module campaign::campaign {
         about: String, // a breif description of the campaign
         active: bool,
         whitelist: Table<address, vector<u64>>,
-        // total_referees: Table<address, bool>,
-        // referrals: Table<address, Table<address, bool>>,
+        total_referees: Table<address, bool>,
+        referrals: Table<address, Table<address, bool>>,
         // activities: Table<address, Table<u64, bool>>,
         started_at: u64,
         ended_at: Option<u64>
@@ -76,7 +76,7 @@ module campaign::campaign {
         clock: &Clock,
         ctx: &mut TxContext) {
         let campaign_uid = object::new(ctx);
-        // let campaign_id = object::uid_to_inner(&campaign_uid);
+        let campaign_id = object::uid_to_inner(&campaign_uid);
 
         let campaign = Campaign {
             id: campaign_uid,
@@ -84,22 +84,22 @@ module campaign::campaign {
             about,
             active: true,
             whitelist: table::new<address, vector<u64>>(ctx),
-            // total_referees: table::new<address, bool>(ctx),
-            // referrals: table::new<address, Table<address, bool>>(ctx),
+            total_referees: table::new<address, bool>(ctx),
+            referrals: table::new<address, Table<address, bool>>(ctx),
             // activities: table::new<address, Table<u64, bool>>(ctx),
             started_at: clock::timestamp_ms(clock),
             ended_at: none()
         };
 
-        // let campaign_owner_id = object::new(ctx);
+        let campaign_owner_id = object::new(ctx);
 
-        // let campaign_owner = CampaignOwnerCap {
-        //     id: campaign_owner_id,
-        //     campaign_id
-        // };
+        let campaign_owner = CampaignOwnerCap {
+            id: campaign_owner_id,
+            campaign_id
+        };
 
         transfer::share_object(campaign);
-        // transfer::share_object(campaign_owner);
+        transfer::share_object(campaign_owner);
     }
 
     // End campaign
@@ -114,8 +114,7 @@ module campaign::campaign {
     }
     
     // Delete campaign
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can end campaign
+    // You are allowed to do anything with the score, including view, edit, delete the entire transcript itself.
     public entry fun delete_campaign(_: &AdminCap, campObject: Campaign){
         let Campaign {
             id, 
@@ -123,8 +122,8 @@ module campaign::campaign {
             about,
             active,
             whitelist, 
-            // total_referees,
-            // referrals,
+            total_referees,
+            referrals,
             // activities,
             started_at,
             ended_at
@@ -132,6 +131,9 @@ module campaign::campaign {
 
         object::delete(id);
         table::drop(whitelist);
+        table::drop(total_referees);
+        // table::drop(referrals);
+        // table::drop(activities);
     }
 
     // Add custodial wallet address to whitelist
@@ -172,7 +174,7 @@ module campaign::campaign {
     // Create a new referral
     // The DApp will create the whitelist entry into the contract after a referral is created successfully.
     public entry fun create_referral(
-        // cap: &CampaignOwnerCap,
+        cap: &CampaignOwnerCap,
         campaign: &mut Campaign,
         referrer: address,
         clock: &Clock,
@@ -183,7 +185,7 @@ module campaign::campaign {
         let referee = ctx.sender();
 
         // asserts that the campaign from actually belongs to the caller
-        // assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
+        assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
 
         // Check if referee is whitelisted
         assert!(table::contains<address, vector<u64>>(&campaign.whitelist, referee), EPermissionNotExist);
@@ -252,12 +254,12 @@ module campaign::campaign {
 
     // Log user activity
     public entry fun log_user_activity( 
-        // cap: &CampaignOwnerCap,       
+        cap: &CampaignOwnerCap,       
         campaign: &mut Campaign,
         clock: &Clock,
         ctx: &mut TxContext) {
         // asserts that the campaign from actually belongs to the caller
-        // assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
+        assert!(cap.campaign_id == object::uid_to_inner(&campaign.id), ENotCampaignOwner);
 
         // asserts that the campaign is still ongoing before attempting to create referral
         assert!(campaign.active == true, ECampaignEndedAlready);
