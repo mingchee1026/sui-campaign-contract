@@ -132,6 +132,15 @@ module campaign::campaign {
         table::drop(nested_table);
     }
 
+    public fun remove_referrals_update_last(campaign: &mut Campaign, referrer: address) {
+        // if (table::contains<address, Table<address, bool>>(&campaign.referrals, referrer)) {
+        //     // Remove referee to the referees table
+        //     table::remove(&mut campaign.referrals, referrer);
+        // }
+        let nested_table = table::remove(&mut campaign.referrals, referrer);
+        table::drop(nested_table);
+    }
+
     public fun remove_activities(_: &AdminCap, campaign: &mut Campaign, referrer: address): Table<u64, bool> {
         // if (table::contains<address, Table<address, bool>>(&campaign.referrals, referrer)) {
         //     // Remove referee to the referees table
@@ -149,6 +158,23 @@ module campaign::campaign {
         // }
         let nested_table = table::remove(&mut campaign.activities, referrer);
         table::drop(nested_table);
+    }
+
+    public fun remove_activities_update_last(campaign: &mut Campaign, referrer: address) {
+        // if (table::contains<address, Table<address, bool>>(&campaign.referrals, referrer)) {
+        //     // Remove referee to the referees table
+        //     table::remove(&mut campaign.referrals, referrer);
+        // }
+        let nested_table = table::remove(&mut campaign.activities, referrer);
+        table::drop(nested_table);
+    }
+
+    public fun remove_referees(campaign: &mut Campaign, key: address) {
+        table::remove(&mut campaign.total_referees, key);
+    }
+
+    public fun remove_whitelist(campaign: &mut Campaign, key: address) {
+        table::remove(&mut campaign.whitelist, key);
     }
 
     // Delete campaign
