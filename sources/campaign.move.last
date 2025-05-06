@@ -143,6 +143,31 @@ module campaign::campaign {
         *old_permission = if (permission) { 1 } else { 0 };
     }
 
+    // Remove permission of custodial wallet address in whitelist
+    // this function uses the capability design pattern (admin_cap) to ensure that only
+    // an admin can update permission
+    public fun remove_whitelist(
+        _: &AdminCap,
+        campaign: &mut Campaign, 
+        key: address) {
+        if (table::contains<address, vector<u64>>(&campaign.whitelist, key)) {
+            // Remove address from the whitelist table
+            table::remove(&mut campaign.whitelist, key);
+        }
+    }
+
+    /* Remove permission of custodial wallet address in whitelist
+    // this function uses for test
+    public fun remove_whitelist(
+        campaign: &mut Campaign, 
+        key: address) {
+        if (table::contains<address, vector<u64>>(&campaign.whitelist, key)) {
+            // Remove address from the whitelist table
+            table::remove(&mut campaign.whitelist, key);
+        }
+    }
+    */
+
     // Create a new referral
     // The DApp will create the whitelist entry into the contract after a referral is created successfully.
     public entry fun create_referral(
