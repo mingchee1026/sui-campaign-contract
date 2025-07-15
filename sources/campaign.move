@@ -1,39 +1,46 @@
 /// Module: campaign
 module campaign::campaign {
     use sui::event;
+    use sui::clock::{Self, Clock};
     use std::string::String;
     use std::option::{none, some};
-    use sui::clock::{Self, Clock};
-    use sui::table::{Self, Table};
 
     /* Error Constants */
-    // const ENotCampaignOwner: u64 = 0;
-    const ENotReferThemselves: u64 = 1;
-    const EAddressAlreadyRegisteredAsReferrer: u64 = 2;
-    const EAddressAlreadyRegisteredAsReferee: u64 = 3;
-    // const ERefereeExistAlready: u64 = 4;
-    const ECampaignEndedAlready:u64 = 5;
-    // const EAddressExistAlready: u64 = 6;
+    const ECampaignEndedAlready: u64 = 5;
     const EAddressNotExist: u64 = 7;
     const EPermissionNotExist: u64 = 8;
-    
+    const ENotReferThemselves: u64 = 1;
+    const EAlreadyReferrer: u64 = 2;
+    const EAlreadyReferee: u64 = 3;
+    const ENotAdmin: u64 = 100;
+
     /* Structs */
 
     public struct CAMPAIGN has drop {}
 
-    // admin capability struct
+    // Admin capability struct
     public struct AdminCap has key, store {
         id: UID
     }
-    
+
+    // Main campaign object (mostly immutable, rarely mutated)
     public struct Campaign has key, store {
         id: UID,
+        admin: address,
         title: String,
-        about: String, // a breif description of the campaign
+        about: String,
         active: bool,
-        whitelist: Table<address, vector<u64>>,
         started_at: u64,
         ended_at: Option<u64>
+    }
+
+    // Per-user whitelist object (sharded user state)
+    public struct UserWhitelist has key, store {
+        id: UID,
+        user: address,
+        permission: bool,
+        referees_count: u64,
+        is_referee: bool
     }
 
     public struct ReferralEvent has copy, drop {
@@ -47,227 +54,208 @@ module campaign::campaign {
         loggedin_at: u64,
     }
 
-    // Module initializer to be executed when this module is published
+    // Module initializer
     fun init(_otw: CAMPAIGN, ctx: &mut TxContext) {
-        // Creating and sending the AdminCap object to the sender.
-        let admin_cap = AdminCap {
-            id: object::new(ctx)
-        };
-
-        transfer::transfer(admin_cap, ctx.sender());
+        let admin_cap = AdminCap { id: object::new(ctx) };
+        // transfer::transfer(admin_cap, ctx.sender());
+        transfer::share_object(admin_cap);
     }
 
-    // create a campaign (and the owner object)
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can create campaign
+    // Create a campaign (admin only)
     public entry fun create_campaign(
         _: &AdminCap,
         title: String,
         about: String,
         clock: &Clock,
-        ctx: &mut TxContext) {
+        ctx: &mut TxContext
+    ) {
         let campaign_uid = object::new(ctx);
-        // let campaign_id = object::uid_to_inner(&campaign_uid);
-
         let campaign = Campaign {
             id: campaign_uid,
+            admin: ctx.sender(),
             title,
             about,
             active: true,
-            whitelist: table::new<address, vector<u64>>(ctx),
             started_at: clock::timestamp_ms(clock),
             ended_at: none()
         };
-
         transfer::share_object(campaign);
     }
 
-    // End campaign
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can end campaign
-    public entry fun end_campaign(_: &AdminCap, campaign: &mut Campaign, clock: &Clock) {
-        // asserts that the campaign is not ended already before attempting to end it
+    // End campaign (admin only)
+    public entry fun end_campaign(
+        _: &AdminCap,
+        campaign: &mut Campaign,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        // Check if sender is admin
+        assert!(campaign.admin == ctx.sender(), ENotAdmin);
+        // Check if campaign is active
         assert!(campaign.active == true, ECampaignEndedAlready);
 
         campaign.active = false;
         campaign.ended_at = some(clock::timestamp_ms(clock));
     }
-    
-    // Delete campaign
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can end campaign
-    public entry fun delete_campaign(_: &AdminCap, campObject: Campaign){
-        let Campaign {
-            id, 
-            title,
-            about,
-            active,
-            whitelist, 
-            started_at,
-            ended_at
-        } = campObject;
 
-        object::delete(id);
-        table::drop(whitelist);
-    }
-
-    // Add custodial wallet address to whitelist
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can add address
-    public entry fun add_whitelist(
-        _: &AdminCap, 
-        campaign: &mut Campaign, 
-        wallet_address: address,
-        permission: bool) {
-        // Add address to the whitelist table if address is not whitelisted
-        if (!table::contains<address, vector<u64>>(&campaign.whitelist, wallet_address)) {
-            let secret_list: vector<u64> = vector[if (permission) { 1 } else { 0 }, 0, 0];
-            table::add(&mut campaign.whitelist, wallet_address, secret_list);
-        }
-    }
-
-    // Update permission of custodial wallet address in whitelist
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can update permission
-    public entry fun update_permission_whitelist(
-        _: &AdminCap, 
-        campaign: &mut Campaign, 
-        wallet_address: address,
-        permission: bool) {
-        // Check if address is already whitelisted
-        assert!(table::contains<address, vector<u64>>(&campaign.whitelist, wallet_address), EAddressNotExist);
-        
-        // Update permission of wallet address
-        let secret_list = table::borrow_mut(&mut campaign.whitelist, wallet_address);
-        let old_permission = vector::borrow_mut(secret_list, 0);
-        *old_permission = if (permission) { 1 } else { 0 };
-    }
-
-    // Remove permission of custodial wallet address in whitelist
-    // this function uses the capability design pattern (admin_cap) to ensure that only
-    // an admin can update permission
-    public fun remove_whitelist(
+    // Delete campaign (admin only)
+    public entry fun delete_campaign(
         _: &AdminCap,
-        campaign: &mut Campaign, 
-        key: address) {
-        if (table::contains<address, vector<u64>>(&campaign.whitelist, key)) {
-            // Remove address from the whitelist table
-            table::remove(&mut campaign.whitelist, key);
-        }
+        campaign: Campaign,
+        ctx: &mut TxContext
+    ) {
+        // Check if sender is admin
+        assert!(campaign.admin == ctx.sender(), ENotAdmin);
+        
+        let Campaign { id, .. } = campaign;
+        object::delete(id);
+        // Note: UserWhitelist objects must be deleted separately if desired.
     }
 
-/*
-    // Remove permission of custodial wallet address in whitelist
-    // this function uses for test
-    public fun remove_whitelist(
-        campaign: &mut Campaign, 
-        key: address) {
-        if (table::contains<address, vector<u64>>(&campaign.whitelist, key)) {
-            // Remove address from the whitelist table
-            table::remove(&mut campaign.whitelist, key);
-        }
-    }
-*/
+    // Add user to whitelist (admin only)
+    public entry fun add_whitelist(
+        campaign: &Campaign,
+        user: address,
+        permission: bool,
+        ctx: &mut TxContext
+    ) {
+        assert!(campaign.admin == ctx.sender(), ENotAdmin);
 
-    // Create a new referral
-    // The DApp will create the whitelist entry into the contract after a referral is created successfully.
-    public entry fun create_referral(
-        campaign: &mut Campaign,
-        referrer: address,
+        // Create a new UserWhitelist object for the user
+        let user_whitelist = UserWhitelist {
+            id: object::new(ctx),
+            user,
+            permission,
+            referees_count: 0,
+            is_referee: false
+        };
+        
+        // transfer::transfer(user_whitelist, user);
+        
+        transfer::share_object(user_whitelist);
+    }
+
+    // Update permission for a user (admin only)
+    public entry fun update_permission_whitelist(
+        campaign: &Campaign,
+        user_whitelist: &mut UserWhitelist,
+        permission: bool,
+        ctx: &mut TxContext
+    ) {
+        assert!(campaign.admin == ctx.sender(), ENotAdmin);
+
+        user_whitelist.permission = permission;
+    }
+
+    // Remove a user from whitelist (admin only)
+    public entry fun remove_whitelist(
+        user_whitelist: UserWhitelist
+    ) {
+        let UserWhitelist { id, .. } = user_whitelist;
+        object::delete(id);
+    }
+
+    // Batch remove users from whitelist (admin only)
+    public entry fun batch_remove_whitelist(
+        mut user_whitelists: vector<UserWhitelist>
+    ) {
+        // Pop and delete each UserWhitelist until the vector is empty
+        while (!vector::is_empty(&user_whitelists)) {
+            let user_whitelist = vector::pop_back(&mut user_whitelists);
+            let UserWhitelist { id, .. } = user_whitelist;
+            object::delete(id);
+        };
+        
+        // At this point, user_whitelists is empty and can be dropped safely
+        vector::destroy_empty(user_whitelists);
+    }
+
+    // User logs activity (user only)
+    public entry fun log_user_activity(
+        campaign: &Campaign,
+        user_whitelist: &UserWhitelist,
         clock: &Clock,
-        ctx: &mut TxContext) {
-        // asserts that the campaign is still ongoing before attempting to create referral
+        ctx: &mut TxContext
+    ) {
         assert!(campaign.active == true, ECampaignEndedAlready);
+        assert!(user_whitelist.permission == true, EPermissionNotExist);
+        assert!(user_whitelist.user == ctx.sender(), EAddressNotExist);
 
+        let current_time = clock::timestamp_ms(clock);
+        event::emit(LoginEvent {
+            user: user_whitelist.user,
+            loggedin_at: current_time
+        });
+    }    
+
+    // Create a referral (user only)
+    public entry fun create_referral(
+        campaign: &Campaign,
+        referee_whitelist: &mut UserWhitelist,
+        referrer_whitelist: &mut UserWhitelist,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        assert!(campaign.active == true, ECampaignEndedAlready);
         let referee = ctx.sender();
 
-        // Check if referee is whitelisted
-        assert!(table::contains<address, vector<u64>>(&campaign.whitelist, referee), EPermissionNotExist);
+        // Check permissions
+        assert!(referee_whitelist.user == referee, EAddressNotExist);
+        assert!(referee_whitelist.permission == true, EPermissionNotExist);
+        assert!(referrer_whitelist.permission == true, EPermissionNotExist);
 
-        // Check if referrer is whitelisted
-        assert!(table::contains<address, vector<u64>>(&campaign.whitelist, referrer), EPermissionNotExist);
+        // Cannot refer themselves
+        assert!(referee != referrer_whitelist.user, ENotReferThemselves);
 
-        // Get the secret list of referee
-        let referee_secret_list = table::borrow_mut(&mut campaign.whitelist, referee);
+        // Check if referee is already a referrer
+        assert!(referee_whitelist.referees_count == 0, EAlreadyReferrer);
+        // Check if referee is already a referee
+        assert!(referee_whitelist.is_referee == false, EAlreadyReferee);
 
-        // Check if referee has permission
-        let permission = referee_secret_list[0];
-        assert!(permission == 1, EPermissionNotExist);
+        // Register referee as referred
+        referee_whitelist.is_referee = true;
 
-        // Can not refer to itself
-        assert!(referee != referrer, ENotReferThemselves);
+        // Increment referrer's count
+        referrer_whitelist.referees_count = referrer_whitelist.referees_count + 1;
 
-        // Check if referee is already registered as referrer
-        let referees_count_of_owner = vector::borrow_mut(referee_secret_list, 1);
-        assert!(referees_count_of_owner == 0, EAddressAlreadyRegisteredAsReferrer);
-
-        // Check if referee is already registered as referee
-        let isReferee = vector::borrow_mut(referee_secret_list, 2);
-        assert!(isReferee == 0, EAddressAlreadyRegisteredAsReferee);
-
-        // Register that address has been referred. 
-        *isReferee = 1;
-
-        // Increase referees count of referrer
-        // Get the secret list of referrer
-        let referrer_secret_list = table::borrow_mut(&mut campaign.whitelist, referrer);
-        let referees_count_of_referrer = vector::borrow_mut(referrer_secret_list, 1);
-        *referees_count_of_referrer = (*referees_count_of_referrer + 1);
-        
-        // Retrieve the current on-chain time
         let created_at = clock::timestamp_ms(clock);
-
-        // Emit the referral event
         event::emit(ReferralEvent {
-            referrer,
+            referrer: referrer_whitelist.user,
             referee,
             created_at
         });
     }
 
-    // Log user activity
-    public entry fun log_user_activity( 
-        campaign: &mut Campaign,
-        clock: &Clock,
-        ctx: &mut TxContext) {
-        // asserts that the campaign is still ongoing before attempting to create referral
-        assert!(campaign.active == true, ECampaignEndedAlready);
-
-        let user = ctx.sender();
-
-        // Check if address is whitelisted
-        assert!(table::contains<address, vector<u64>>(&campaign.whitelist, user), EPermissionNotExist);
-
-        // Check if address has permission
-        let secret_list = table::borrow(&campaign.whitelist, user);
-        let permission = secret_list[0];
-        assert!(permission == 1, EPermissionNotExist);
-
-        // Retrieve the current on-chain time
-        let current_time = clock::timestamp_ms(clock);
-
-        // Emit user activity event
-        event::emit(LoginEvent {
-            user: user, 
-            loggedin_at: current_time
-        });
-    }
-
-    /* Private Functions */
-
-    
-
-    /* Test Functions */
-
+    // Helper: Only for testing, create admin cap
     #[test_only]
-    // Wrapper of module initializer for testing
     public fun init_for_testing(ctx: &mut TxContext) {
-        // Creating and sending the AdminCap object to the sender.
-        let admin_cap = AdminCap {
-            id: object::new(ctx)
-        };
-
+        let admin_cap = AdminCap { id: object::new(ctx) };
         transfer::transfer(admin_cap, ctx.sender());
     }
-}
 
+    /*
+    //  Batch add users to whitelist (admin only)
+    public entry fun batch_add_whitelist(
+        campaign: &Campaign,
+        mut users: vector<address>,
+        ctx: &mut TxContext
+    ) {
+        assert!(campaign.admin == ctx.sender(), ENotAdmin);
+
+        while (!vector::is_empty(&users)) {
+            let user = vector::pop_back(&mut users);
+            let user_whitelist = UserWhitelist {
+                id: object::new(ctx),
+                user,
+                permission: true,
+                referees_count: 0,
+                is_referee: false
+            };
+            transfer::share_object(user_whitelist);
+        };
+
+        // At this point, users is empty and can be dropped safely
+        vector::destroy_empty(users);
+    }
+*/
+}

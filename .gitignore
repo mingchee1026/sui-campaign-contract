@@ -6,6 +6,7 @@
 *.njsproj
 *.sln
 *.sw?
+*.qodo
 
 # OS generated files
 .DS_Store*
